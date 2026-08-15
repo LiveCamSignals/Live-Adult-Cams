@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Live Adult Cams - Free live sex cams, webcam girls, couples and more. HD streams updating in real-time.">
+  <meta name="robots" content="index, follow">
+  <title>Live Adult Cams | Free Live Sex Cams & Webcam Shows</title>
+  <link rel="stylesheet" href="css/styles.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+  <div class="age-gate" id="ageGate">
+    <div class="age-box">
+      <h2>18+ Only</h2>
+      <p>This website contains adult content including live nude webcam shows.<br>You must be at least 18 years old to enter.</p>
+      <div class="age-buttons">
+        <button id="ageYes" class="btn-primary">I am 18 or older – Enter</button>
+        <button id="ageNo" class="btn-secondary">I am under 18 – Exit</button>
+      </div>
+    </div>
+  </div>
+
+  <header class="header">
+    <div class="container header-inner">
+      <a href="/" class="logo">
+        <span class="logo-icon">●</span> Live Adult Cams
+      </a>
+      <nav class="nav">
+        <a href="#" class="nav-link active" data-filter="all">All Live</a>
+        <a href="#" class="nav-link" data-filter="Female">Girls</a>
+        <a href="#" class="nav-link" data-filter="Couple">Couples</a>
+        <a href="#" class="nav-link" data-filter="hd">HD</a>
+        <a href="#" class="nav-link" data-filter="mobile">Mobile</a>
+      </nav>
+      <div class="header-actions">
+        <div class="search-wrap">
+          <input type="text" id="searchInput" placeholder="Search tags, name..." autocomplete="off">
+        </div>
+        <button id="refreshBtn" class="btn-icon" title="Refresh now">↻</button>
+      </div>
+    </div>
+  </header>
+
+  <div class="container main-layout">
+    <aside class="sidebar">
+      <div class="filter-section">
+        <h3>Filters</h3>
+        <label class="checkbox">
+          <input type="checkbox" id="filterHD"> HD Only
+        </label>
+        <label class="checkbox">
+          <input type="checkbox" id="filterMobile"> Mobile Only
+        </label>
+        <label class="checkbox">
+          <input type="checkbox" id="filterNew"> New Models
+        </label>
+      </div>
+
+      <div class="filter-section">
+        <h3>Gender</h3>
+        <select id="genderSelect">
+          <option value="all">All</option>
+          <option value="Female">Female</option>
+          <option value="Couple Female + Male">Couple (F+M)</option>
+          <option value="Couple Female + Female">Couple (F+F)</option>
+          <option value="Male">Male</option>
+          <option value="Transsexual">Transsexual</option>
+        </select>
+      </div>
+
+      <div class="filter-section">
+        <h3>Sort By</h3>
+        <select id="sortSelect">
+          <option value="viewers">Most Viewers</option>
+          <option value="online">Longest Online</option>
+          <option value="name">Name A-Z</option>
+        </select>
+      </div>
+
+      <div class="filter-section">
+        <h3>Popular Tags</h3>
+        <div id="tagCloud" class="tag-cloud"></div>
+      </div>
+
+      <div class="stats-box">
+        <div class="stat"><span id="totalLive">0</span> Live Now</div>
+        <div class="stat small">Auto-refresh: <span id="countdown">45</span>s</div>
+      </div>
+    </aside>
+
+    <main class="content">
+      <div class="toolbar">
+        <h1 id="pageTitle">All Live Cams</h1>
+        <div class="view-toggle">
+          <button class="view-btn active" data-view="grid" title="Grid view">▦</button>
+          <button class="view-btn" data-view="list" title="List view">☰</button>
+        </div>
+      </div>
+
+      <div id="loading" class="loading">
+        <div class="spinner"></div>
+        <p>Loading live cams...</p>
+      </div>
+
+      <div id="error" class="error hidden"></div>
+
+      <div id="modelGrid" class="model-grid"></div>
+
+      <div id="noResults" class="no-results hidden">
+        <p>No models match your filters.</p>
+        <button id="clearFilters" class="btn-primary">Clear Filters</button>
+      </div>
+    </main>
+  </div>
+
+  <!-- Modal for model detail / embed -->
+  <div id="modal" class="modal hidden">
+    <div class="modal-backdrop"></div>
+    <div class="modal-content">
+      <button class="modal-close" id="modalClose">×</button>
+      <div id="modalBody"></div>
+    </div>
+  </div>
+
+  <footer class="footer">
+    <div class="container">
+      <p>© 2026 Live Adult Cams. All models are 18+. Powered by affiliate links.</p>
+      <p class="disclaimer">This site uses affiliate tracking links. We may earn commissions from sign-ups and purchases.</p>
+    </div>
+  </footer>
+
+  <script src="js/app.js"></script>
+</body>
+</html>
