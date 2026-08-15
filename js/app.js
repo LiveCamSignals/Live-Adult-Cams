@@ -1,7 +1,8 @@
 (function () {
   'use strict';
 
-  const API_URL = 'https://bngprm.com/promo.php?c=18144&type=api&api_v=1&limit=120&api_type=json';
+  // Use a slightly lower limit + cache buster for reliability
+  const API_BASE = 'https://bngprm.com/promo.php?c=18144&type=api&api_v=1&limit=80&api_type=json';
   const AFFILIATE_ID = '18144';
   const REFRESH_INTERVAL = 45; // seconds
 
@@ -9,7 +10,6 @@
   let filtered = [];
   let activeTag = null;
   let countdown = REFRESH_INTERVAL;
-  let refreshTimer = null;
   let countdownTimer = null;
 
   // DOM
@@ -81,23 +81,60 @@
     return `${m}m`;
   }
 
-  // Fetch
+  // Fetch with better error reporting
   async function fetchModels() {
     loading.classList.remove('hidden');
     errorEl.classList.add('hidden');
+    errorEl.innerHTML = '';
+
+    const url = API_BASE + '&_=' + Date.now(); // cache buster
+
     try {
-      const res = await fetch(API_URL, { cache: 'no-store' });
-      if (!res.ok) throw new Error('API error ' + res.status);
-      const data = await res.json();
-      models = Array.isArray(data) ? data : [];
+      const res = await fetch(url, {
+        method: 'GET',
+        mode: 'cors',
+        cache: 'no-store',
+        headers: {
+          'Accept': 'application/json, text/plain, */*'
+        }
+      });
+
+      if (!res.ok) {
+        throw new Error(`HTTP ${res.status} ${res.statusText}`);
+      }
+
+      const text = await res.text();
+      let data;
+      try {
+        data = JSON.parse(text);
+      } catch (parseErr) {
+        console.error('JSON parse failed. First 200 chars:', text.slice(0, 200));
+        throw new Error('Invalid response from API (not JSON). The feed may be temporarily unavailable or blocked.');
+      }
+
+      if (!Array.isArray(data)) {
+        throw new Error('Unexpected API response format');
+      }
+
+      models = data;
       applyFilters();
       buildTagCloud();
       totalLive.textContent = models.length;
     } catch (err) {
-      console.error(err);
-      errorEl.textContent = 'Failed to load live cams. Please try again later.';
+      console.error('Fetch error:', err);
+      let msg = 'Failed to load live cams.';
+      if (err.name === 'TypeError' && err.message.includes('Failed to fetch')) {
+        msg += ' This is often caused by an ad-blocker, privacy extension, or network block on the BongaCams domain.<br><br>Please try:<br>• Disable ad-blockers / uBlock / Privacy Badger for this site<br>• Try a different browser or incognito<br>• Click Retry below';
+      } else {
+        msg += '<br><small style="opacity:0.7">' + (err.message || String(err)) + '</small>';
+      }
+      msg += '<br><br><button id="retryBtn" class="btn-primary" style="margin-top:12px">Retry Now</button>';
+      errorEl.innerHTML = msg;
       errorEl.classList.remove('hidden');
       grid.innerHTML = '';
+
+      const retry = document.getElementById('retryBtn');
+      if (retry) retry.addEventListener('click', () => { fetchModels(); resetCountdown(); });
     } finally {
       loading.classList.add('hidden');
     }
@@ -107,13 +144,11 @@
   function applyFilters() {
     let list = [...models];
 
-    // Gender
     const gender = genderSelect.value;
     if (gender && gender !== 'all') {
       list = list.filter(m => (m.gender || '').includes(gender) || m.gender === gender);
     }
 
-    // Nav filters
     const activeNav = $('.nav-link.active');
     if (activeNav) {
       const f = activeNav.dataset.filter;
@@ -123,12 +158,10 @@
       else if (f === 'mobile') list = list.filter(m => m.is_mobile);
     }
 
-    // Checkboxes
     if (filterHD.checked) list = list.filter(m => m.hd_cam);
     if (filterMobile.checked) list = list.filter(m => m.is_mobile);
     if (filterNew.checked) list = list.filter(m => m.is_new);
 
-    // Search / Tag
     const q = (searchInput.value || '').trim().toLowerCase();
     if (q) {
       list = list.filter(m => {
@@ -142,7 +175,6 @@
       list = list.filter(m => (m.tags || []).some(t => t.toLowerCase() === activeTag.toLowerCase()));
     }
 
-    // Sort
     const sort = sortSelect.value;
     if (sort === 'viewers') {
       list.sort((a, b) => (b.members_count || 0) - (a.members_count || 0));
@@ -164,8 +196,6 @@
     }
     noResults.classList.add('hidden');
 
-    const isList = grid.classList.contains('list-view');
-
     grid.innerHTML = filtered.map(m => {
       const thumb = getThumb(m);
       const name = m.display_name || m.username;
@@ -178,7 +208,7 @@
       return `
         <article class="model-card" data-username="${m.username}">
           <div class="thumb-wrap">
-            <img src="${thumb}" alt="${name}" loading="lazy" onerror="this.src='https://via.placeholder.com/400x300/16161a/666?text=Live'">
+            <img src="${thumb}" alt="${name}" loading="lazy" onerror="this.src='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22400%22 height=%22300%22%3E%3Crect fill=%22%2316161a%22 width=%22400%22 height=%22300%22/%3E%3Ctext fill=%22%23666%22 x=%2250%25%22 y=%2250%25%22 text-anchor=%22middle%22 dy=%22.3em%22 font-family=%22sans-serif%22%3ELive%3C/text%3E%3C/svg%3E'">
             <span class="live-badge">LIVE</span>
             <span class="viewers-badge">👁 ${viewers}</span>
             ${m.hd_cam ? '<span class="hd-badge">HD</span>' : ''}
@@ -190,7 +220,7 @@
               <span>${genderShort}</span>
               <span>${formatOnline(m.online_time)}</span>
             </div>
-            <div class="card-topic" title="${topic}">${topic || ' '}</div>
+            <div class="card-topic" title="${topic.replace(/"/g, '&quot;')}">${topic || ' '}</div>
             <div class="card-tags">
               ${tags.map(t => `<span class="card-tag">${t}</span>`).join('')}
             </div>
@@ -199,7 +229,6 @@
       `;
     }).join('');
 
-    // Click handlers
     $$('.model-card').forEach(card => {
       card.addEventListener('click', () => openModal(card.dataset.username));
     });
