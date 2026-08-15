@@ -2,7 +2,14 @@
   'use strict';
 
   // Use a slightly lower limit + cache buster for reliability
-  const API_BASE = 'https://bngprm.com/promo.php?c=18144&type=api&api_v=1&limit=80&api_type=json';
+  const API_HOSTS = [
+    'https://bngprm.com',
+    'https://promo-bc.com',
+    'https://bngdyn.com',
+    'https://tools.bongacams.com',
+    'https://bngpst.com'
+  ];
+  const API_PATH = '/promo.php?c=18144&type=api&api_v=1&limit=80&api_type=json';
   const AFFILIATE_ID = '18144';
   const REFRESH_INTERVAL = 45; // seconds
 
@@ -66,7 +73,7 @@
   }
 
   function affiliateChatLink(username) {
-    return `https://bngprm.com/promo.php?type=direct_link&v=2&c=${AFFILIATE_ID}&models[]=${encodeURIComponent(username)}`;
+    return `https://promo-bc.com/promo.php?type=direct_link&v=2&c=${AFFILIATE_ID}&models[]=${encodeURIComponent(username)}`;
   }
 
   function affiliateProfileLink(m) {
@@ -81,52 +88,64 @@
     return `${m}m`;
   }
 
-  // Fetch with better error reporting
+  // Fetch with multi-host fallback (some networks block certain domains)
   async function fetchModels() {
     loading.classList.remove('hidden');
     errorEl.classList.add('hidden');
     errorEl.innerHTML = '';
 
-    const url = API_BASE + '&_=' + Date.now(); // cache buster
+    let lastError = null;
+    let success = false;
 
-    try {
-      const res = await fetch(url, {
-        method: 'GET',
-        mode: 'cors',
-        cache: 'no-store',
-        headers: {
-          'Accept': 'application/json, text/plain, */*'
-        }
-      });
-
-      if (!res.ok) {
-        throw new Error(`HTTP ${res.status} ${res.statusText}`);
-      }
-
-      const text = await res.text();
-      let data;
+    for (const host of API_HOSTS) {
+      const url = host + API_PATH + '&_=' + Date.now();
       try {
-        data = JSON.parse(text);
-      } catch (parseErr) {
-        console.error('JSON parse failed. First 200 chars:', text.slice(0, 200));
-        throw new Error('Invalid response from API (not JSON). The feed may be temporarily unavailable or blocked.');
-      }
+        const res = await fetch(url, {
+          method: 'GET',
+          mode: 'cors',
+          cache: 'no-store',
+          headers: { 'Accept': 'application/json, text/plain, */*' }
+        });
 
-      if (!Array.isArray(data)) {
-        throw new Error('Unexpected API response format');
-      }
+        if (!res.ok) {
+          lastError = new Error(`HTTP ${res.status} from ${host}`);
+          continue;
+        }
 
-      models = data;
-      applyFilters();
-      buildTagCloud();
-      totalLive.textContent = models.length;
-    } catch (err) {
-      console.error('Fetch error:', err);
+        const raw = await res.text();
+        let data;
+        try {
+          data = JSON.parse(raw);
+        } catch (parseErr) {
+          lastError = new Error('Invalid JSON from ' + host);
+          continue;
+        }
+
+        if (!Array.isArray(data)) {
+          lastError = new Error('Unexpected format from ' + host);
+          continue;
+        }
+
+        models = data;
+        applyFilters();
+        buildTagCloud();
+        totalLive.textContent = models.length;
+        success = true;
+        console.log('Loaded from', host);
+        break;
+      } catch (err) {
+        console.warn('Failed host', host, err.message);
+        lastError = err;
+      }
+    }
+
+    if (!success) {
+      console.error('All hosts failed', lastError);
       let msg = 'Failed to load live cams.';
-      if (err.name === 'TypeError' && err.message.includes('Failed to fetch')) {
-        msg += ' This is often caused by an ad-blocker, privacy extension, or network block on the BongaCams domain.<br><br>Please try:<br>• Disable ad-blockers / uBlock / Privacy Badger for this site<br>• Try a different browser or incognito<br>• Click Retry below';
+      if (lastError && lastError.message && lastError.message.includes('Failed to fetch')) {
+        msg += '<br><br>Your network or DNS cannot reach the BongaCams promo servers (ERR_NAME_NOT_RESOLVED).<br><br>Try:<br>• Different DNS (1.1.1.1 or 8.8.8.8)<br>• Disable VPN / ad-block / privacy tools<br>• Incognito mode or another browser<br>• Mobile data instead of Wi-Fi';
       } else {
-        msg += '<br><small style="opacity:0.7">' + (err.message || String(err)) + '</small>';
+        msg += '<br><small style="opacity:0.7">' + (lastError && lastError.message ? lastError.message : 'Unknown error') + '</small>';
       }
       msg += '<br><br><button id="retryBtn" class="btn-primary" style="margin-top:12px">Retry Now</button>';
       errorEl.innerHTML = msg;
@@ -135,9 +154,9 @@
 
       const retry = document.getElementById('retryBtn');
       if (retry) retry.addEventListener('click', () => { fetchModels(); resetCountdown(); });
-    } finally {
-      loading.classList.add('hidden');
     }
+
+    loading.classList.add('hidden');
   }
 
   // Filters
