@@ -1,7 +1,9 @@
 (function () {
   'use strict';
 
-  // Use a slightly lower limit + cache buster for reliability
+  // Primary source: local JSON updated by GitHub Actions every 5 min
+  // Fallback: direct API hosts (often blocked by DNS/ISP)
+  const LOCAL_DATA = 'data/models.json';
   const API_HOSTS = [
     'https://bngprm.com',
     'https://promo-bc.com',
@@ -11,13 +13,7 @@
   ];
   const API_PATH = '/promo.php?c=18144&type=api&api_v=1&limit=80&api_type=json';
   const AFFILIATE_ID = '18144';
-  const REFRESH_INTERVAL = 45; // seconds
-
-  let models = [];
-  let filtered = [];
-  let activeTag = null;
-  let countdown = REFRESH_INTERVAL;
-  let countdownTimer = null;
+  const REFRESH_INTERVAL = 60; // seconds (local file is updated every 5 min)
 
   // DOM
   const $ = (sel) => document.querySelector(sel);
@@ -94,64 +90,62 @@
     errorEl.classList.add('hidden');
     errorEl.innerHTML = '';
 
-    let lastError = null;
-    let success = false;
+    let data = null;
+    let source = '';
 
-    for (const host of API_HOSTS) {
-      const url = host + API_PATH + '&_=' + Date.now();
-      try {
-        const res = await fetch(url, {
-          method: 'GET',
-          mode: 'cors',
-          cache: 'no-store',
-          headers: { 'Accept': 'application/json, text/plain, */*' }
-        });
-
-        if (!res.ok) {
-          lastError = new Error(`HTTP ${res.status} from ${host}`);
-          continue;
-        }
-
+    // 1. Try local data first (works even when Bonga domains are DNS-blocked)
+    try {
+      const res = await fetch(LOCAL_DATA + '?_=' + Date.now(), { cache: 'no-store' });
+      if (res.ok) {
         const raw = await res.text();
-        let data;
+        data = JSON.parse(raw);
+        if (Array.isArray(data) && data.length > 0) {
+          source = 'local';
+        } else {
+          data = null;
+        }
+      }
+    } catch (e) {
+      console.warn('Local data failed', e.message);
+    }
+
+    // 2. Fallback to external hosts
+    if (!data) {
+      for (const host of API_HOSTS) {
         try {
-          data = JSON.parse(raw);
-        } catch (parseErr) {
-          lastError = new Error('Invalid JSON from ' + host);
-          continue;
+          const res = await fetch(host + API_PATH + '&_=' + Date.now(), {
+            method: 'GET', mode: 'cors', cache: 'no-store',
+            headers: { 'Accept': 'application/json, text/plain, */*' }
+          });
+          if (!res.ok) continue;
+          const raw = await res.text();
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            data = parsed;
+            source = host;
+            break;
+          }
+        } catch (err) {
+          console.warn('Failed host', host, err.message);
         }
-
-        if (!Array.isArray(data)) {
-          lastError = new Error('Unexpected format from ' + host);
-          continue;
-        }
-
-        models = data;
-        applyFilters();
-        buildTagCloud();
-        totalLive.textContent = models.length;
-        success = true;
-        console.log('Loaded from', host);
-        break;
-      } catch (err) {
-        console.warn('Failed host', host, err.message);
-        lastError = err;
       }
     }
 
-    if (!success) {
-      console.error('All hosts failed', lastError);
+    if (data && data.length) {
+      models = data;
+      applyFilters();
+      buildTagCloud();
+      totalLive.textContent = models.length;
+      console.log('Loaded', models.length, 'models from', source);
+    } else {
       let msg = 'Failed to load live cams.';
-      if (lastError && lastError.message && lastError.message.includes('Failed to fetch')) {
-        msg += '<br><br>Your network or DNS cannot reach the BongaCams promo servers (ERR_NAME_NOT_RESOLVED).<br><br>Try:<br>• Different DNS (1.1.1.1 or 8.8.8.8)<br>• Disable VPN / ad-block / privacy tools<br>• Incognito mode or another browser<br>• Mobile data instead of Wi-Fi';
-      } else {
-        msg += '<br><small style="opacity:0.7">' + (lastError && lastError.message ? lastError.message : 'Unknown error') + '</small>';
-      }
+      msg += '<br><br>Your network appears to block BongaCams domains (DNS resolution failed).';
+      msg += '<br>The site normally loads a cached copy that is updated every few minutes via GitHub Actions.';
+      msg += '<br><br>If this is the first load, wait a few minutes and click Retry, or check that the Action has run.';
       msg += '<br><br><button id="retryBtn" class="btn-primary" style="margin-top:12px">Retry Now</button>';
       errorEl.innerHTML = msg;
       errorEl.classList.remove('hidden');
       grid.innerHTML = '';
-
       const retry = document.getElementById('retryBtn');
       if (retry) retry.addEventListener('click', () => { fetchModels(); resetCountdown(); });
     }
